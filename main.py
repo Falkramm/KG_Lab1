@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import colorchooser
 import colorsys
+from tkinter import Scale, StringVar
 
 
 class ColorConverterApp:
@@ -12,51 +13,30 @@ class ColorConverterApp:
         self.rgb_labels = []
         self.hls_labels = []
 
+        self.input_type_var = StringVar()
+        self.input_slider = None
+
         self.create_color_inputs()
         self.create_color_labels()
 
         self.root.mainloop()
 
     def create_color_inputs(self):
-        self.cmyk_inputs = []
-        self.rgb_inputs = []
-        self.hls_inputs = []
+        input_type_frame = tk.Frame(self.root)
+        input_type_frame.pack()
+        input_type_label = tk.Label(input_type_frame, text="Input Type:")
+        input_type_label.grid(row=0, column=0)
+        input_type_dropdown = tk.OptionMenu(input_type_frame, self.input_type_var, "CMYK", "RGB", "HLS",
+                                            command=self.update_input_type)
+        input_type_dropdown.grid(row=0, column=1)
 
-        cmyk_frame = tk.Frame(self.root)
-        cmyk_frame.pack()
+        slider_frame = tk.Frame(self.root)
+        slider_frame.pack()
+        self.input_sliders = []
         for i in range(4):
-            label = tk.Label(cmyk_frame, text=f"CMYK[{i}]")
-            label.grid(row=0, column=i)
-            input_box = tk.Entry(cmyk_frame, width=5)
-            input_box.grid(row=1, column=i)
-            self.cmyk_inputs.append(input_box)
-
-        rgb_frame = tk.Frame(self.root)
-        rgb_frame.pack()
-        for i in range(3):
-            label = tk.Label(rgb_frame, text=f"RGB[{i}]")
-            label.grid(row=0, column=i)
-            input_box = tk.Entry(rgb_frame, width=5)
-            input_box.grid(row=1, column=i)
-            self.rgb_inputs.append(input_box)
-
-        hls_frame = tk.Frame(self.root)
-        hls_frame.pack()
-        for i in range(3):
-            label = tk.Label(hls_frame, text=f"HLS[{i}]")
-            label.grid(row=0, column=i)
-            input_box = tk.Entry(hls_frame, width=5)
-            input_box.grid(row=1, column=i)
-            self.hls_inputs.append(input_box)
-
-        for entry in self.cmyk_inputs:
-            entry.bind("<Key>", self.update_cmyk)
-
-        for entry in self.rgb_inputs:
-            entry.bind("<Key>", self.update_rgb)
-
-        for entry in self.hls_inputs:
-            entry.bind("<Key>", self.update_hls)
+            self.input_sliders.append(Scale(slider_frame, from_=0, to=255, length=256, orient=tk.HORIZONTAL,
+                                            command=self.update_slider_value))
+            self.input_sliders[i].pack()
 
     def create_color_labels(self):
         labels_frame = tk.Frame(self.root)
@@ -89,105 +69,174 @@ class ColorConverterApp:
             label.pack()
             self.hls_labels.append(label)
 
-    def update_cmyk(self, event):
-        try:
-            c, m, y, k = [float(entry.get()) for entry in self.cmyk_inputs]
-            r, g, b = self.cmyk_to_rgb(c, m, y, k)
+        palette_button = tk.Button(labels_frame, text="Choose Color", command=self.choose_color)
+        palette_button.grid(row=0, column=3, padx=10)
+
+    def choose_color(self):
+        color = colorchooser.askcolor()[1]
+        if color:
+            r, g, b = self.hex_to_rgb(color)
+            c, m, y, k = self.rgb_to_cmyk(r, g, b)
             h, l, s = self.rgb_to_hls(r, g, b)
             self.set_background_color(r, g, b)
             self.update_cmyk_labels(c, m, y, k)
             self.update_rgb_labels(r, g, b)
             self.update_hls_labels(h, l, s)
+            self.set_slider_values(r, g, b)
+
+    def set_slider_values(self, r, g, b):
+        self.input_sliders[0].set(r)
+        self.input_sliders[1].set(g)
+        self.input_sliders[2].set(b)
+
+    def hex_to_rgb(self, color):
+        color = color.lstrip('#')
+        return tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))
+
+    def update_input_type(self, event):
+        input_type = self.input_type_var.get()
+        if input_type == "CMYK":
+            self.set_slider_conf(0, 100)
+            self.input_sliders[3].pack()
+            self.input_sliders[0].set(100 * float(self.cmyk_labels[0].cget('text')[3:]))
+            self.input_sliders[1].set(100 * float(self.cmyk_labels[1].cget('text')[3:]))
+            self.input_sliders[2].set(100 * float(self.cmyk_labels[2].cget('text')[3:]))
+            self.input_sliders[3].set(100 * float(self.cmyk_labels[3].cget('text')[3:]))
+        elif input_type == "RGB":
+            self.set_slider_conf(0, 255)
+            self.input_sliders[3].pack_forget()
+            self.input_sliders[0].set(int(self.rgb_labels[0].cget('text')[3:]))
+            self.input_sliders[1].set(int(self.rgb_labels[1].cget('text')[3:]))
+            self.input_sliders[2].set(int(self.rgb_labels[2].cget('text')[3:]))
+        elif input_type == "HLS":
+            self.set_slider_conf(0, 100)
+            self.input_sliders[0].configure(from_=0, to=359)
+            self.input_sliders[3].pack_forget()
+            self.input_sliders[0].set(int(self.hls_labels[0].cget('text')[3:]))
+            self.input_sliders[1].set(int(self.hls_labels[1].cget('text')[3:]))
+            self.input_sliders[2].set(int(self.hls_labels[2].cget('text')[3:]))
+
+    def set_slider_conf(self, from__, to__):
+        for i in range(4):
+            self.input_sliders[i].configure(from_=from__, to=to__)
+
+    def update_slider_value(self, value):
+        input_type = self.input_type_var.get()
+        if input_type == "CMYK":
+            self.update_cmyk(None)
+        elif input_type == "RGB":
+            self.update_rgb(None)
+        elif input_type == "HLS":
+            self.update_hls(None)
+
+    def update_cmyk(self, event):
+        try:
+            input_value = [int(slider.get()) / 100 for slider in self.input_sliders]
+            if self.input_type_var.get() == "CMYK":
+                c, m, y, k = input_value
+                r, g, b = self.cmyk_to_rgb(c, m, y, k)
+                h, l, s = self.rgb_to_hls(r, g, b)
+                self.set_background_color(r, g, b)
+                self.update_cmyk_labels(c, m, y, k)
+                self.update_rgb_labels(r, g, b)
+                self.update_hls_labels(h, l, s)
         except ValueError:
             pass
 
     def update_rgb(self, event):
         try:
-            r, g, b = [int(entry.get()) for entry in self.rgb_inputs]
-            c, m, y, k = self.rgb_to_cmyk(r, g, b)
-            h, l, s = self.rgb_to_hls(r, g, b)
-            self.set_background_color(r, g, b)
-            self.update_rgb_labels(r, g, b)
-            self.update_cmyk_labels(c, m, y, k)
-            self.update_hls_labels(h, l, s)
+            input_value = [int(slider.get()) for slider in self.input_sliders[:-1]]
+            if self.input_type_var.get() == "RGB":
+                r, g, b = input_value
+                c, m, y, k = self.rgb_to_cmyk(r, g, b)
+                h, l, s = self.rgb_to_hls(r, g, b)
+                self.set_background_color(r, g, b)
+                self.update_cmyk_labels(c, m, y, k)
+                self.update_rgb_labels(r, g, b)
+                self.update_hls_labels(h, l, s)
         except ValueError:
             pass
 
     def update_hls(self, event):
         try:
-            h, l, s = [float(entry.get()) for entry in self.hls_inputs]
-            r, g, b = self.hls_to_rgb(h, l, s)
-            c, m, y, k = self.rgb_to_cmyk(r, g, b)
-            self.set_background_color(r, g, b)
-            self.update_hls_labels(h, l, s)
-            self.update_rgb_labels(r, g, b)
-            self.update_cmyk_labels(c, m, y, k)
-        except ValueError:
-            pass
-
-    def set_background_color(self, r, g, b):
-        try:
-            hex_color = '#{:02x}{:02x}{:02x}'.format(r, g, b)
-            self.root.configure(bg=hex_color)
+            input_value = [int(slider.get()) for slider in self.input_sliders[:-1]]
+            if self.input_type_var.get() == "HLS":
+                h, l, s = input_value
+                r, g, b = self.hls_to_rgb(h, l, s)
+                c, m, y, k = self.rgb_to_cmyk(r, g, b)
+                self.set_background_color(r, g, b)
+                self.update_cmyk_labels(c, m, y, k)
+                self.update_rgb_labels(r, g, b)
+                self.update_hls_labels(h, l, s)
         except ValueError:
             pass
 
     def update_cmyk_labels(self, c, m, y, k):
-        self.cmyk_labels[0].config(text=f"C: {c:.2f}")
-        self.cmyk_labels[1].config(text=f"M: {m:.2f}")
-        self.cmyk_labels[2].config(text=f"Y: {y:.2f}")
-        self.cmyk_labels[3].config(text=f"K: {k:.2f}")
+        labels = self.cmyk_labels
+        labels[0].configure(text=f"C: {c:.2f}")
+        labels[1].configure(text=f"M: {m:.2f}")
+        labels[2].configure(text=f"Y: {y:.2f}")
+        labels[3].configure(text=f"K: {k:.2f}")
 
     def update_rgb_labels(self, r, g, b):
-        self.rgb_labels[0].config(text=f"R: {r}")
-        self.rgb_labels[1].config(text=f"G: {g}")
-        self.rgb_labels[2].config(text=f"B: {b}")
+        labels = self.rgb_labels
+        labels[0].configure(text=f"R: {r}")
+        labels[1].configure(text=f"G: {g}")
+        labels[2].configure(text=f"B: {b}")
 
     def update_hls_labels(self, h, l, s):
-        self.hls_labels[0].config(text=f"H: {h:.2f}")
-        self.hls_labels[1].config(text=f"L: {l:.2f}")
-        self.hls_labels[2].config(text=f"S: {s:.2f}")
+        labels = self.hls_labels
+        labels[0].configure(text=f"H: {h}")
+        labels[1].configure(text=f"L: {l}")
+        labels[2].configure(text=f"S: {s}")
 
-    def cmyk_to_rgb(self, c, m, y, k):
-        r = int((1 - c) * (1 - k) * 255)
-        g = int((1 - m) * (1 - k) * 255)
-        b = int((1 - y) * (1 - k) * 255)
+    def set_background_color(self, r, g, b):
+        hex_color = f"#{r:02x}{g:02x}{b:02x}"
+        self.root.configure(background=hex_color)
+
+    @staticmethod
+    def cmyk_to_rgb(c, m, y, k):
+        r = round(255 * (1 - c) * (1 - k))
+        g = round(255 * (1 - m) * (1 - k))
+        b = round(255 * (1 - y) * (1 - k))
         return r, g, b
 
-    def rgb_to_cmyk(self, r, g, b):
-        c = 1 - r / 255
-        m = 1 - g / 255
-        y = 1 - b / 255
-        k = min(c, m, y)
-
+    @staticmethod
+    def rgb_to_cmyk(r, g, b):
+        r = r / 255
+        g = g / 255
+        b = b / 255
+        k = 1 - max(r, g, b)
         if k == 1:
-            return 0, 0, 0, 1
-
-        c = (c - k) / (1 - k)
-        m = (m - k) / (1 - k)
-        y = (y - k) / (1 - k)
-
+            c = m = y = 0
+        else:
+            c = (1 - r - k) / (1 - k)
+            m = (1 - g - k) / (1 - k)
+            y = (1 - b - k) / (1 - k)
         return c, m, y, k
 
-    def rgb_to_hls(self, r, g, b):
-        r /= 255
-        g /= 255
-        b /= 255
+    @staticmethod
+    def rgb_to_hls(r, g, b):
+        r = r / 255
+        g = g / 255
+        b = b / 255
         h, l, s = colorsys.rgb_to_hls(r, g, b)
-        h *= 360
-        l *= 100
-        s *= 100
+        h = round(h * 360)
+        l = round(l * 100)
+        s = round(s * 100)
         return h, l, s
 
-    def hls_to_rgb(self, h, l, s):
-        h /= 360
-        l /= 100
-        s /= 100
+    @staticmethod
+    def hls_to_rgb(h, l, s):
+        h = h / 360
+        l = l / 100
+        s = s / 100
         r, g, b = colorsys.hls_to_rgb(h, l, s)
-        r = int(r * 255)
-        g = int(g * 255)
-        b = int(b * 255)
+        r = round(r * 255)
+        g = round(g * 255)
+        b = round(b * 255)
         return r, g, b
 
 
-app = ColorConverterApp()
+if __name__ == "__main__":
+    app = ColorConverterApp()
